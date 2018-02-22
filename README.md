@@ -5,6 +5,8 @@ Springboot service that the consumer will interaction with.
 
 ## Step 1 - Simple Consumer calling Provider
 
+Checkout the 'step1' branch of this repo ```git checkout step1```
+
 Given we have a client that needs to make a HTTP GET request to a provider service, and requires a response in JSON format.
 
 
@@ -98,12 +100,23 @@ Starting a Gradle Daemon, 4 stopped Daemons could not be reused, use --status fo
 
 BUILD SUCCESSFUL
 ```
+The '[test:NO, validDate:2017-01-27T11:49:04.131, count:1000]' is the data received from the provider that is the return value from the loadProviderJson method, which gets printed to stdout.
 
 Don't forget to stop the dropwizard-provider that is running in the first terminal when you have finished this step.
 
 ## Step 2 - Client Tested but integration fails
 
-Now lets get the client to use the data it gets back from the provider. Here is the updated client method that uses the returned data:
+Checkout the 'step2' branch of this repo ```git checkout step2```
+
+Now we will modify the consumer Client, and make this pass local tests, but ultimately break
+when we attempt to integrate the consumer and provider. We see this type of failure
+occur when the consumer team is working with unvalidated assumptions about the
+provider, or the provider team has changed the API without telling the consumer
+team.
+
+Here is the updated client method that uses the returned data (note that the
+consumer now expects the date value to be returned as the "date" property within
+the JSON, and not "validDate" which we used before):
 
 *consumer/src/main/groovy/au/com/dius/pactworkshop/consumer/Client.groovy:*
 
@@ -121,7 +134,8 @@ Now lets get the client to use the data it gets back from the provider. Here is 
 
 ![Sequence 2](diagrams/step2_sequence_diagram.png)
 
-Let's now test our updated client.
+Let's now test our updated client (note that this test is using the "date" property,
+and is returning the "count" property with the value 100)
 
 *consumer/src/test/groovy/au/com/dius/pactworkshop/consumer/ClientSpec.groovy:*
 
@@ -175,8 +189,15 @@ $ ./gradlew :consumer:check
 BUILD SUCCESSFUL
 ```
 
-However, there is a problem with this integration point. Running the actual client against any of the providers results in
- a runtime exception!
+However, there is a problem with this integration point. Running the actual client against any of the providers results in a runtime exception!
+
+For example, start the dropwizard-provider in one terminal:
+
+```console
+$ ./gradlew :providers:dropwizard-provider:run
+```
+
+In another terminal run the consumer
 
 ```console
 $ ./gradlew :consumer:run
@@ -226,6 +247,8 @@ The provider returns a `validDate` while the consumer is
 trying to use `date`, which will blow up when run for real even with the tests all passing. Here is where Pact comes in.
 
 ## Step 3 - Pact to the rescue
+
+Checkout the 'step3' branch of this repo ```git checkout step3```
 
 Let us add Pact to the project and write a consumer pact test.
 
@@ -348,6 +371,8 @@ Generated pact file (*consumer/build/pacts/Our Little Consumer-Our Provider.json
 
 ## Step 4 - Verify pact against provider
 
+Checkout the 'step4' branch of this repo ```git checkout step4```
+
 There are two ways of validating a pact file against a provider. The first is using a build tool (like Gradle) to
 execute the pact against the running service. The second is to write a pact verification test. We will be doing both
 in this step.
@@ -399,7 +424,20 @@ pact {
 }
 ```
 
-Now if we copy the pact file from the consumer project and run our pact verification task, it should fail.
+Now if we copy the pact file from the consumer project and run our pact verification task, it should fail. First copy the pact:
+
+```console
+$ ./gradlew publishWorkshopPact
+:copyPactToDropwizard
+:copyPactToSpringboot
+:publishWorkshopPact
+
+BUILD SUCCESSFUL
+
+Total time: 1.138 secs
+```
+
+Now run the pact verify:
 
 ```console
 $ ./gradlew :providers:springboot-provider:pactVerify
@@ -482,11 +520,27 @@ field. Also, the date formats are different.
 
 ## Step 5 - Verify the provider with a test
 
+Checkout the 'step5' branch of this repo ```git checkout step5```
+
 In this step we will verify the same pact file against the Dropwizard provider using a JUnit test. First we copy it over,
 or 'publish' it to our provider project.
 
-We add the pact provider junit jar and the dropwizard testing jar to our project dependencies, and then we can create a
-simple test to verify our provider.
+We add the pact provider junit jar and the dropwizard testing jar to our project dependencies, and then we can create a simple test to verify our provider.
+
+Copy the pact again, as the recent 'git checkout step5' will have removed the
+previously copied version:
+
+```console
+$ ./gradlew publishWorkshopPact
+:copyPactToDropwizard
+:copyPactToSpringboot
+:publishWorkshopPact
+
+BUILD SUCCESSFUL
+
+Total time: 1.138 secs
+```
+Explore the PactVerificationTest.groovy file
 
 ```groovy
 @RunWith(PactRunner)
@@ -572,6 +626,8 @@ Failures:
 
 ## Step 6 - Back to the client we go
 
+Checkout the 'step6' branch of this repo ```git checkout step6```
+
 Let's correct the consumer test to handle any integer for `count` and use the correct field for the `date`. Then we need
 to add a type matcher for `count` and change the field for the date to be `validDate`. We can also add a date expression
 to make sure the `validDate` field is a valid date. This is important because we are parsing it.
@@ -606,8 +662,34 @@ Running this test will fail until we fix the client. Here is the correct client 
   }
 ```
 
-Now the test passes. But we still have a problem with the date format, which we must fix in the provider. Running the
-client now fails because of that.
+Let's test the consumer now:
+```
+$ ./gradlew :consumer:check
+:consumer:compileJava NO-SOURCE
+:consumer:compileGroovy UP-TO-DATE
+:consumer:processResources NO-SOURCE
+:consumer:classes UP-TO-DATE
+:consumer:compileTestJava NO-SOURCE
+:consumer:compileTestGroovy
+:consumer:processTestResources NO-SOURCE
+:consumer:testClasses
+:consumer:test
+:consumer:check
+
+BUILD SUCCESSFUL
+
+Total time: 5.104 secs
+```
+
+Now the test passes. But we still have a problem with the date format, which we must fix in the provider. Running the consumer client against a real producer now fails because of that.
+
+Start the dropwizard-provider in one terminal:
+
+```console
+$ ./gradlew :providers:dropwizard-provider:run
+```
+
+Now run the consumer in another terminal.
 
 ```console
 $ ./gradlew :consumer:run
@@ -656,6 +738,8 @@ BUILD FAILED
 
 ## Step 7 - Verify the providers again
 
+Checkout the 'step7' branch of this repo ```git checkout step7```
+
 We need to 'publish' the consumer pact file to the provider projects again. Then, running the provider verification
 tests we get the expected failure about the date format.
 
@@ -694,7 +778,9 @@ Running the verification against the providers now pass. Yay!
 
 ## Step 8 - Test for the missing query parameter
 
-In this step we are going to add a test for the case where the query parameter is missing or invalid. We do this by 
+Checkout the 'step8' branch of this repo ```git checkout step8```
+
+In this step we are going to add a test for the case where the query parameter is missing or invalid. We do this by
 adding additional tests and expectations to the consumer pact test. Our client code needs to be modified slightly to
 be able to pass invalid dates in, and if the date parameter is null, don't include it in the request.
 
@@ -782,8 +868,10 @@ After running our specs, the pact file will have 2 new interactions.
 ```
 
 ## Step 9 - Verify the provider with the missing/invalid date query parameter
-   
-Let us run this updated pact file with our providers. We get a 500 response as the provider can't handle the missing 
+
+Checkout the 'step9' branch of this repo ```git checkout step9```
+
+Let us run this updated pact file with our providers. We get a 500 response as the provider can't handle the missing
 or incorrect date.
 
 Here is the dropwizard test output:
@@ -797,19 +885,19 @@ Verifying a pact between Our Little Consumer and Our Provider
         includes headers
           "Content-Type" with value "application/json" (OK)
         has a matching body (FAILED)
-  
+
   Failures:
-  
+
   0) a request with a missing date parameter returns a response which has a matching body
         $.body -> Expected 'validDate is required' but received Map(code -> 500, message -> There was an error processing your request. It has been logged (ID 57cd4a2eae1d5293).)
-  
-  
+
+
   1) a request with a missing date parameter returns a response which has status code 400
         assert expectedStatus == actualStatus
                |              |  |
                400            |  500
                               false
-  
+
 ```
 
 and the springboot build output:
@@ -883,6 +971,8 @@ BUILD FAILED
 Time to update the providers to handle these cases.
 
 ## Step 10 - Update the providers to handle the missing/invalid query parameters
+
+Checkout the 'step10' branch of this repo ```git checkout step10```
 
 Let's fix our providers so they generate the correct responses for the query parameters.
 
@@ -980,6 +1070,8 @@ Now running the `pactVerify` is all successful.
 
 ## Step 11 - Provider states
 
+Checkout the 'step11' branch of this repo ```git checkout step11```
+
 We have one final thing to test for. If the provider ever returns a count of zero, we will get a division by
 zero error in our client. This is an important bit of information to add to our contract. Let us start with a
 consumer test for this.
@@ -1025,6 +1117,8 @@ This adds a new interaction to the pact file:
 ```
 
 ## Step 12 - provider states for the providers
+
+Checkout the 'step12' branch of this repo ```git checkout step12```
 
 To be able to verify our providers, we need to be able to change the data that the provider returns. There are different
 ways of doing this depending on how the provider is being verified.
@@ -1213,6 +1307,8 @@ Running the Gradle pact verification now passes.
 
 # Step 13 - Using a Pact Broker
 
+Checkout the 'step13' branch of this repo ```git checkout step13```
+
 We've been publishing our pacts from the consumer project by coping the files over to the provider project, but we can
 use a Pact Broker to do this instead.
 
@@ -1244,7 +1340,7 @@ pact {
 
 ```
 
-Now, we can run `./gradlew consumer:pactPublish` after running the consumer tests to have the generated pact file 
+Now, we can run `./gradlew consumer:pactPublish` after running the consumer tests to have the generated pact file
 published to the broker. Afterwards, you can navigate to the Pact Broker URL and see the published pact there.
 
 ### Dropwizard provider
@@ -1291,7 +1387,7 @@ class PactVerificationTest {
 
 ### Springboot provider
 
-The springboot provider is using the Gradle plugin, so we can just configure its build to fetch the pacts from the 
+The springboot provider is using the Gradle plugin, so we can just configure its build to fetch the pacts from the
 broker.
 
 Updated build file:
